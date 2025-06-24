@@ -1,4 +1,6 @@
-# diff_drive_can
+# University-of-Windsor-Mars-Rover-Team-Drive Train System - 2025
+
+## diff_drive_can
 
 ROS 2 package for controlling a differential drive rover using a PS4 controller over CAN bus.
 
