@@ -1,0 +1,49 @@
+# PS4 Controller Configuration
+ps4_twist_node:
+  ros__parameters:
+    # Joystick axes
+    linear_axis: 1      # Left stick Y-axis
+    angular_axis: 0     # Left stick X-axis
+    
+    # Speed limits
+    max_linear_speed: 2.0    # m/s
+    max_angular_speed: 1.64  # rad/s
+    
+    # Control parameters
+    deadzone: 0.1
+    turbo_button: 5          # R1 button
+    turbo_multiplier: 1.5
+    emergency_stop_button: 4 # L1 button
+    
+    # Publishing rate
+    publish_rate: 50.0       # Hz
+    
+    # Debug
+    debug_mode: false
+
+# CAN Motor Control Configuration
+twist_to_can_node:
+  ros__parameters:
+    # Robot dimensions
+    wheel_base: 1.22         # meters (4 feet)
+    
+    # Speed limits (should match ps4_twist_node)
+    max_linear_speed: 2.0    # m/s
+    max_angular_speed: 1.64  # rad/s
+    
+    # PWM configuration
+    pwm_min: 0
+    pwm_max: 1999
+    pwm_neutral: 1000        # Neutral/stop position
+    
+    # CAN configuration
+    can_interface: "can0"
+    can_id: 0x123
+    can_bitrate: 1000000     # 1 Mbps (matching STM32 configuration)
+    
+    # Safety parameters
+    cmd_vel_timeout: 0.5     # seconds
+    ramp_rate: 5.0           # PWM units per ms
+    
+    # Debug
+    debug_mode: false
