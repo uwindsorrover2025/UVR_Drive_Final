@@ -31,17 +31,21 @@ def test_can_communication(interface='can0', can_id=0x123):
     
     # Test sequences
     test_sequences = [
-        ("Stop (neutral)", 1000, 1000, 2.0),
-        ("Forward 25%", 1250, 1250, 2.0),
-        ("Forward 50%", 1500, 1500, 2.0),
-        ("Forward 75%", 1750, 1750, 2.0),
-        ("Turn left", 1250, 1500, 2.0),
-        ("Turn right", 1500, 1250, 2.0),
-        ("Spin left", 750, 1250, 2.0),
-        ("Spin right", 1250, 750, 2.0),
-        ("Reverse 25%", 750, 750, 2.0),
-        ("Stop (neutral)", 1000, 1000, 1.0),
-    ]
+    ("Stop (neutral)", 1500, 1500, 2.0),
+    ("Forward 25%", 1625, 1625, 2.0),
+    ("Forward 50%", 1750, 1750, 2.0),
+    ("Forward 75%", 1875, 1875, 2.0),
+    ("Forward 100%", 2000, 2000, 2.0),
+    ("Turn left", 1625, 1750, 2.0),
+    ("Turn right", 1750, 1625, 2.0),
+    ("Spin left", 1000, 2000, 2.0),   # Full reverse left, full forward right
+    ("Spin right", 2000, 1000, 2.0),  # Full forward left, full reverse right
+    ("Reverse 25%", 1375, 1375, 2.0),
+    ("Reverse 50%", 1250, 1250, 2.0),
+    ("Reverse 75%", 1125, 1125, 2.0),
+    ("Reverse 100%", 1000, 1000, 2.0),
+    ("Stop (neutral)", 1500, 1500, 1.0),
+]
     
     print("\nStarting test sequence...")
     print("Monitor with: candump can0")

@@ -58,7 +58,11 @@ class PS4TwistNode(Node):
         initial_twist.linear.x = 0.0
         initial_twist.angular.z = 0.0
         self.twist_pub.publish(initial_twist)
-# Create timer for publishing at fixed rate
+        
+        # DIAGNOSTIC: Log initial neutral twist message
+        self.get_logger().warn(f'🔍 INITIAL TWIST: linear={initial_twist.linear.x}, angular={initial_twist.angular.z}')
+        
+        # Create timer for publishing at fixed rate
         self.timer = self.create_timer(1.0 / self.publish_rate, self.publish_twist)
         
         self.get_logger().info(f'PS4 Twist Node initialized with:')
@@ -110,6 +114,10 @@ class PS4TwistNode(Node):
         linear_raw = -msg.axes[self.linear_axis]  # Negate for intuitive forward/backward
         angular_raw = msg.axes[self.angular_axis]
         
+        # DIAGNOSTIC: Always log raw joystick values to check for neutral drift
+        if abs(linear_raw) < 0.05 and abs(angular_raw) < 0.05:
+            self.get_logger().warn(f'🔍 JOYSTICK NEAR NEUTRAL: linear_raw={linear_raw:.6f}, angular_raw={angular_raw:.6f}')
+        
         if self.debug_mode and (abs(linear_raw) > 0.01 or abs(angular_raw) > 0.01):
             self.get_logger().info(f'Raw axes: linear_raw={linear_raw:.3f} (axis {self.linear_axis}), angular_raw={angular_raw:.3f} (axis {self.angular_axis})')
         
@@ -146,6 +154,10 @@ class PS4TwistNode(Node):
         twist.angular.x = 0.0
         twist.angular.y = 0.0
         twist.angular.z = self.current_angular
+        
+        # DIAGNOSTIC: Log when we're publishing near-neutral values
+        if abs(twist.linear.x) < 0.05 and abs(twist.angular.z) < 0.05:
+            self.get_logger().warn(f'🔍 PUBLISHING NEAR NEUTRAL: linear={twist.linear.x:.6f}, angular={twist.angular.z:.6f}')
         
         self.twist_pub.publish(twist)
         

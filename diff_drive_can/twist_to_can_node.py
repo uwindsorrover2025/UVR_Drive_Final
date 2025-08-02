@@ -21,26 +21,39 @@ class TwistToCANNode(Node):
         super().__init__('twist_to_can_node')
         
         # Declare parameters
+        self.declare_parameter('pwm_neutral', 1500)
         self.declare_parameter('wheel_base', 1.22)  # 4 feet in meters
         self.declare_parameter('max_linear_speed', 2.0)  # m/s
         self.declare_parameter('max_angular_speed', 1.64)  # rad/s
         self.declare_parameter('pwm_min', 1000)
         self.declare_parameter('pwm_max', 2000)
-        self.declare_parameter('pwm_neutral', 1500)
         self.declare_parameter('can_interface', 'can0')
         self.declare_parameter('can_id', 0x123)
-        self.declare_parameter('can_bitrate', 1000000)
+        self.declare_parameter('can_bitrate', 500000)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
         self.declare_parameter('ramp_rate', 5.0)  # PWM units per ms
         self.declare_parameter('debug_mode', False)
         
-        # Get parameters
+        # Get parameters with detailed diagnostic logging
         self.wheel_base = self.get_parameter('wheel_base').value
         self.max_linear_speed = self.get_parameter('max_linear_speed').value
         self.max_angular_speed = self.get_parameter('max_angular_speed').value
-        self.pwm_min = self.get_parameter('pwm_min').value
-        self.pwm_max = self.get_parameter('pwm_max').value
-        self.pwm_neutral = self.get_parameter('pwm_neutral').value
+        
+        # CRITICAL DIAGNOSTIC: Log parameter retrieval
+        pwm_min_param = self.get_parameter('pwm_min')
+        pwm_max_param = self.get_parameter('pwm_max')
+        pwm_neutral_param = self.get_parameter('pwm_neutral')
+        
+        self.get_logger().error(f'🔍 PARAM RETRIEVAL: pwm_min param object: {pwm_min_param}')
+        self.get_logger().error(f'🔍 PARAM RETRIEVAL: pwm_max param object: {pwm_max_param}')
+        self.get_logger().error(f'🔍 PARAM RETRIEVAL: pwm_neutral param object: {pwm_neutral_param}')
+        
+        self.pwm_min = pwm_min_param.value
+        self.pwm_max = pwm_max_param.value
+        self.pwm_neutral = pwm_neutral_param.value
+        
+        self.get_logger().error(f'🔍 PARAM VALUES: pwm_min={self.pwm_min}, pwm_max={self.pwm_max}, pwm_neutral={self.pwm_neutral}')
+        
         self.can_interface = self.get_parameter('can_interface').value
         self.can_id = self.get_parameter('can_id').value
         self.can_bitrate = self.get_parameter('can_bitrate').value
@@ -73,13 +86,23 @@ class TwistToCANNode(Node):
         self.get_logger().info(f'  CAN interface: {self.can_interface}')
         self.get_logger().info(f'  CAN ID: 0x{self.can_id:03X}')
         self.get_logger().info(f'  PWM range: {self.pwm_min}-{self.pwm_max} (neutral: {self.pwm_neutral})')
+        
+        # DIAGNOSTIC: Log initial PWM values
+        self.get_logger().warn(f'🔍 DIAGNOSTIC - Parameter values loaded:')
+        self.get_logger().warn(f'   pwm_min = {self.pwm_min} (should be 1000)')
+        self.get_logger().warn(f'   pwm_max = {self.pwm_max} (should be 2000)')
+        self.get_logger().warn(f'   pwm_neutral = {self.pwm_neutral} (should be 1500)')
+        self.get_logger().warn(f'🔍 DIAGNOSTIC - Initial PWM state:')
+        self.get_logger().warn(f'   current_left_pwm = {self.current_left_pwm}')
+        self.get_logger().warn(f'   current_right_pwm = {self.current_right_pwm}')
+        self.get_logger().warn(f'   target_left_pwm = {self.target_left_pwm}')
+        self.get_logger().warn(f'   target_right_pwm = {self.target_right_pwm}')
     
     def init_can_interface(self):
         """Initialize CAN bus interface with error handling"""
         try:
-            # Try to bring up the interface if it's down
-            os.system(f"sudo ip link set {self.can_interface} type can bitrate {self.can_bitrate} 2>/dev/null")
-            os.system(f"sudo ip link set {self.can_interface} up 2>/dev/null")
+            # Skip sudo commands - just try to create the bus interface
+            self.get_logger().info(f'Attempting to initialize CAN interface {self.can_interface}...')
             
             # Create CAN bus interface
             self.can_bus = can.interface.Bus(
@@ -91,8 +114,8 @@ class TwistToCANNode(Node):
             self.get_logger().info(f'CAN interface {self.can_interface} initialized successfully')
             
         except Exception as e:
-            self.get_logger().error(f'Failed to initialize CAN interface: {e}')
-            self.get_logger().error('Make sure CAN interface is available and you have proper permissions')
+            self.get_logger().warn(f'CAN interface not available: {e}')
+            self.get_logger().warn('Running in PWM display mode - will show detailed left/right PWM signals without CAN transmission')
             self.can_bus = None
     
     def twist_to_differential(self, linear_vel, angular_vel):
@@ -109,12 +132,17 @@ class TwistToCANNode(Node):
         normalized = max(-1.0, min(1.0, velocity / self.max_linear_speed))
         
         # Convert to PWM range
-        # PWM neutral (1000) is stop, 0 is full reverse, 1999 is full forward
+        # PWM neutral (1500) is stop, 1000 is full reverse, 2000 is full forward
         pwm_range = (self.pwm_max - self.pwm_min) / 2.0
         pwm = int(self.pwm_neutral + normalized * pwm_range)
         
+        # DIAGNOSTIC: Log PWM conversion details especially for neutral
+        if abs(velocity) < 0.01:
+            self.get_logger().warn(f'🔍 NEUTRAL PWM CALC: vel={velocity:.6f} -> norm={normalized:.6f} -> pwm={pwm} (expected {self.pwm_neutral})')
+        
         # Clamp to valid range
-        return max(self.pwm_min, min(self.pwm_max, pwm))
+        result = max(self.pwm_min, min(self.pwm_max, pwm))
+        return result
     
     def twist_callback(self, msg):
         """Handle incoming Twist messages"""
@@ -126,12 +154,30 @@ class TwistToCANNode(Node):
         linear_vel = msg.linear.x
         angular_vel = msg.angular.z
         
+        # DIAGNOSTIC: Enhanced logging for neutral detection
+        if abs(linear_vel) < 0.01 and abs(angular_vel) < 0.01:
+            self.get_logger().warn(f'🔍 NEUTRAL TWIST: linear={linear_vel:.6f}, angular={angular_vel:.6f}')
+        else:
+            self.get_logger().warn(f'🔍 TWIST MSG: linear={linear_vel:.3f}, angular={angular_vel:.3f}')
+        
         # Convert to differential drive
         left_vel, right_vel = self.twist_to_differential(linear_vel, angular_vel)
         
         # Convert to PWM values
         self.target_left_pwm = self.velocity_to_pwm(left_vel)
         self.target_right_pwm = self.velocity_to_pwm(right_vel)
+        
+        # DIAGNOSTIC: Enhanced PWM logging for neutral detection
+        if abs(left_vel) < 0.01 and abs(right_vel) < 0.01:
+            self.get_logger().warn(
+                f'🔍 NEUTRAL PWM: Vel L={left_vel:.6f}, R={right_vel:.6f} -> '
+                f'PWM L={self.target_left_pwm}, R={self.target_right_pwm} (should be {self.pwm_neutral})'
+            )
+        else:
+            self.get_logger().warn(
+                f'🔍 PWM CALC: Vel L={left_vel:.3f}, R={right_vel:.3f} -> '
+                f'PWM L={self.target_left_pwm}, R={self.target_right_pwm}'
+            )
         
         if self.debug_mode:
             self.get_logger().debug(
@@ -155,7 +201,8 @@ class TwistToCANNode(Node):
         
         if time_since_last_cmd > self.cmd_vel_timeout:
             if not self.timeout_active:
-                self.get_logger().warn(f'Command timeout! No cmd_vel for {time_since_last_cmd:.1f}s')
+                self.get_logger().warn(f'🔍 TIMEOUT! No cmd_vel for {time_since_last_cmd:.1f}s')
+                self.get_logger().warn(f'🔍 Setting targets to pwm_neutral = {self.pwm_neutral}')
                 self.timeout_active = True
             # Set target to neutral (stop)
             self.target_left_pwm = self.pwm_neutral
@@ -164,6 +211,7 @@ class TwistToCANNode(Node):
         
         if self.timeout_active:
             # Set both current PWM outputs to neutral for safety
+            self.get_logger().warn(f'🔍 TIMEOUT ACTIVE: Force setting current PWM to neutral = {self.pwm_neutral}')
             self.current_left_pwm = self.pwm_neutral
             self.current_right_pwm = self.pwm_neutral
 # Calculate max PWM change for this update (ramp_rate is per ms, timer is 20ms)
@@ -191,6 +239,28 @@ class TwistToCANNode(Node):
         try:
             # Pack as big-endian int16
             data = struct.pack('>hh', left_pwm, right_pwm)
+            
+            # DIAGNOSTIC: Enhanced byte-level CAN logging for asymmetric motor debugging
+            byte0, byte1, byte2, byte3 = data[0], data[1], data[2], data[3]
+            
+            if left_pwm == self.pwm_neutral and right_pwm == self.pwm_neutral:
+                self.get_logger().warn(
+                    f'🔍 NEUTRAL CAN: ID=0x{self.can_id:03X} Data={data.hex().upper()} '
+                    f'PWM L={left_pwm}, R={right_pwm} (NEUTRAL - should be 05DC05DC)'
+                )
+                self.get_logger().warn(
+                    f'🔍 BYTE ANALYSIS: [0x{byte0:02X} 0x{byte1:02X}] = L_PWM({left_pwm}), '
+                    f'[0x{byte2:02X} 0x{byte3:02X}] = R_PWM({right_pwm})'
+                )
+            else:
+                self.get_logger().warn(
+                    f'🔍 CAN TX: ID=0x{self.can_id:03X} Data={data.hex().upper()} '
+                    f'PWM L={left_pwm}, R={right_pwm} (neutral={self.pwm_neutral})'
+                )
+                self.get_logger().warn(
+                    f'🔍 BYTE ANALYSIS: [0x{byte0:02X} 0x{byte1:02X}] = L_PWM({left_pwm}), '
+                    f'[0x{byte2:02X} 0x{byte3:02X}] = R_PWM({right_pwm})'
+                )
             
             # Create CAN message
             msg = can.Message(

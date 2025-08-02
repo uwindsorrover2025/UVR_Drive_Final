@@ -32,18 +32,18 @@ twist_to_can_node:
     max_angular_speed: 1.64  # rad/s
     
     # PWM configuration
-    pwm_min: 0
-    pwm_max: 1999
-    pwm_neutral: 1000        # Neutral/stop position
+    pwm_min: 1000            # Minimum PWM (full reverse)
+    pwm_max: 2000            # Maximum PWM (full forward)
+    pwm_neutral: 1500        # Neutral/stop position (1500 us)
     
     # CAN configuration
     can_interface: "can0"
     can_id: 0x123
-    can_bitrate: 1000000     # 1 Mbps (matching STM32 configuration)
+    can_bitrate: 500000      # 500 kbps (matching CAN bus configuration)
     
     # Safety parameters
     cmd_vel_timeout: 0.5     # seconds
     ramp_rate: 5.0           # PWM units per ms
     
     # Debug
-    debug_mode: false
+    debug_mode: true
